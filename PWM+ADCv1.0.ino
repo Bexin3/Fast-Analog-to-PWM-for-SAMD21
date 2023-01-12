@@ -1,11 +1,11 @@
 #include "wiring_private.h"
 
-const int ADCpin = 0; //Pin for ADC
-int pin = 13; //PWM pin
+const int ADCpin = 0;           //Pin for ADC
+int pin = 13;                   //PWM pin
 const float Frequency = 10.0f;  //PWM frequency, higher the frequency lower resolution. Wont work below 10 hz wont work.
-const int cDiv = 5;    //Set up dividor of time for ADC, with high PWM frequencies high values may let the Duty period only to change every few cycles, while too low values may lead to less stable output
-int GAIN = 1;          //1, 2, 4, 8, 16, 32, multiplier of input voltage
-const int res = 12; //Set up Resolution of the ADC, 8 or 10 or 12 bits
+const int cDiv = 5;             //Set up dividor of time for ADC, with high PWM frequencies high values may let the Duty period only to change every few cycles, while too low values may lead to less stable output
+int GAIN = 1;                   //1, 2, 4, 8, 16, 32, multiplier of input voltage
+const int res = 12;             //Set up Resolution of the ADC, 8 or 10 or 12 bits
 int PRESC;
 int PRESVAL;
 int PRESCALC;
@@ -13,15 +13,15 @@ int PRESCALC;
 
 
 //Calibration
-const int minv = 0;    //Minimum meassured value of the input signal
+const int minv = 0;     //Minimum meassured value of the input signal
 const int maxv = 4000;  //Maximum meassured value og the input signal
 
 
 //Not to be changed
-int a; //Value dividor here
-const int gClk = 3; //Selects ADC clock, not functioning in this version
-int Analog; //Analog read values go here
-int Period; //Time period calculated here
+int a;               //Value dividor here
+const int gClk = 3;  //Selects ADC clock, not functioning in this version
+int Analog;          //Analog read values go here
+int Period;          //Time period calculated here
 
 
 
@@ -33,22 +33,20 @@ uint32_t _pinAttr;
 
 void setup() {
 
-  calc(); //Calculates constants based on user set values
-  PWMSetup(); //Sets up PWM
+  calc();                         //Calculates constants based on user set values
+  PWMSetup();                     //Sets up PWM
   genericClockSetup(gClk, cDiv);  //Sets up clock speeds
-  ADCSetup(); //Sets up ADC
-  ADCPort(); //Selects ADCPort, next version will allow it to be changed
-  ADC->SWTRIG.bit.START = true; //Does first ADC read
+  ADCSetup();                     //Sets up ADC
+  ADCPort();                      //Selects ADCPort, next version will allow it to be changed
+  ADC->SWTRIG.bit.START = true;   //Does first ADC read
 }
 
 void Tcxh() {
 
 
-  ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY; //Wait for new analog value to be ready
-  Analog = ADC->RESULT.reg; //Write it down
-  ADC->SWTRIG.bit.START = true; //Start reading again
-
-
+  ADC->INTFLAG.reg = ADC_INTFLAG_RESRDY;  //Wait for new analog value to be ready
+  Analog = ADC->RESULT.reg;               //Write it down
+  ADC->SWTRIG.bit.START = true;           //Start reading again
 }
 
 
@@ -143,8 +141,8 @@ void ADCSetup() {
 
 void calc() {
   Prescaler();
-  Period = int((48000000 / Frequency / PRESVAL) - 1); //Calculates number of cycles period takes up.
-  a = (maxv - minv); //Calculate by how much to divide
+  Period = int((48000000 / Frequency / PRESVAL) - 1);  //Calculates number of cycles period takes up.
+  a = (maxv - minv);                                   //Calculate by how much to divide
   //Calculate GAIN setup values
   if (GAIN == 1) {
     GAIN = 15;
@@ -190,7 +188,7 @@ void PWMSetup() {
 
 
 
-     // Wait for synchronization
+  // Wait for synchronization
   GCLK->CLKCTRL.reg = (uint16_t)(GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_IDs[_tcNum]);
   REG_GCLK_GENDIV = GCLK_GENDIV_DIV(1);
 
@@ -204,7 +202,7 @@ void PWMSetup() {
 
 
     // -- Configure TC
-    Tc* TCx = (Tc*)GetTC(_pinDesc.ulPWMChannel);
+    Tc *TCx = (Tc *)GetTC(_pinDesc.ulPWMChannel);
 
     //reset
     TCx->COUNT8.CTRLA.bit.SWRST = 1;
@@ -252,7 +250,7 @@ void PWMSetup() {
 
 
     // -- Configure TCC
-    Tcc* TCCx = (Tcc*)GetTC(_pinDesc.ulPWMChannel);
+    Tcc *TCCx = (Tcc *)GetTC(_pinDesc.ulPWMChannel);
 
     // Disable TCCx
     TCCx->CTRLA.bit.ENABLE = 0;
@@ -401,18 +399,31 @@ void TC5_Handler() {  //gets activated when PWM cycle ends
 }
 
 void Prescaler() {
-PRESCALC = (2000/Frequency); 
- 
-if (PRESCALC>64) {PRESC = 6; PRESVAL = 256;}
-else if (PRESCALC>16) {PRESC = 5; PRESVAL = 64;}
-else if (PRESCALC>8) {PRESC = 4; PRESVAL = 16;}
-else if (PRESCALC>4) {PRESC = 3; PRESVAL = 8;}
-else if (PRESCALC>2) {PRESC = 2; PRESVAL = 4;}
-else if (PRESCALC>1) {PRESC = 1; PRESVAL = 2;}
-else {PRESC = 0; PRESVAL = 1;};
+  PRESCALC = (2000 / Frequency);
 
+  if (PRESCALC > 64) {
+    PRESC = 6;
+    PRESVAL = 256;
+  } else if (PRESCALC > 16) {
+    PRESC = 5;
+    PRESVAL = 64;
+  } else if (PRESCALC > 8) {
+    PRESC = 4;
+    PRESVAL = 16;
+  } else if (PRESCALC > 4) {
+    PRESC = 3;
+    PRESVAL = 8;
+  } else if (PRESCALC > 2) {
+    PRESC = 2;
+    PRESVAL = 4;
+  } else if (PRESCALC > 1) {
+    PRESC = 1;
+    PRESVAL = 2;
+  } else {
+    PRESC = 0;
+    PRESVAL = 1;
+  };
 }
-
 
 
 
