@@ -1,14 +1,15 @@
 #include "wiring_private.h"
 
 const int ADCpin = 0;           //Pin for ADC
-int pin = 13;                   //PWM pin
-const float Frequency = 10.0f;  //PWM frequency, higher the frequency lower resolution. Wont work below 10 hz wont work.
-const int cDiv = 5;             //Set up dividor of time for ADC, with high PWM frequencies high values may let the Duty period only to change every few cycles, while too low values may lead to less stable output
+int pin = 13;                   //PWM pin, 13 is usually connected to LED so you can see it working.
+const float Frequency = 1.0f;  //PWM frequency, higher the frequency lower resolution. Wont work below 0.035 hz wont work.
+const int ADCDiv = 5;             //Set up dividor of time for ADC, with high PWM frequencies high values may let the Duty period only to change every few cycles, while too low values may lead to less stable output. Up to 255.
 int GAIN = 1;                   //1, 2, 4, 8, 16, 32, multiplier of input voltage
 const int res = 12;             //Set up Resolution of the ADC, 8 or 10 or 12 bits
-int PRESC;
-int PRESVAL;
-int PRESCALC;
+const int ADCClk = 3;  //Selects ADC clock generator, both to be between 3-8
+const int PWMClk = 4;  //Selects PWM clock generator, they cant be the same. 
+
+
 
 
 
@@ -18,11 +19,15 @@ const int maxv = 4000;  //Maximum meassured value og the input signal
 
 
 //Not to be changed
-int a;               //Value dividor here
-const int gClk = 3;  //Selects ADC clock, not functioning in this version
+int a;               //Value dividor here Select between 3-8
 int Analog;          //Analog read values go here
 int Period;          //Time period calculated here
 
+int GCLKDIV;
+int PRESC;
+int PRESVAL;
+int PRESCALC;
+int PWMCLKID;
 
 
 uint32_t _tcNum;
@@ -34,11 +39,13 @@ uint32_t _pinAttr;
 void setup() {
 
   calc();                         //Calculates constants based on user set values
+  PWMClock();
   PWMSetup();                     //Sets up PWM
-  genericClockSetup(gClk, cDiv);  //Sets up clock speeds
+  genericClockSetup(ADCClk, ADCDiv);  //Sets up clock speeds
   ADCSetup();                     //Sets up ADC
   ADCPort();                      //Selects ADCPort, next version will allow it to be changed
   ADC->SWTRIG.bit.START = true;   //Does first ADC read
+  Serial.begin(2000000);
 }
 
 void Tcxh() {
@@ -66,8 +73,8 @@ void genericClockSetup(int clk, int dFactor) {
   REG_PM_APBCMASK |= PM_APBCMASK_ADC;
 
 
-  REG_GCLK_GENDIV = GCLK_GENDIV_DIV(cDiv) |  // Divide the 48MHz clock source by divisor 3: 48MHz/3=16MHz
-                    GCLK_GENDIV_ID(3);       // Select Generic Clock (GCLK) 3
+  REG_GCLK_GENDIV = GCLK_GENDIV_DIV(dFactor) |  // Divide the 48MHz clock source by divisor 3: 48MHz/3=16MHz
+                    GCLK_GENDIV_ID(clk);       // Select Generic Clock (GCLK) 3
   while (GCLK->STATUS.bit.SYNCBUSY)
     ;  // Wait for synchronization
   ;
@@ -75,11 +82,11 @@ void genericClockSetup(int clk, int dFactor) {
   REG_GCLK_GENCTRL = GCLK_GENCTRL_IDC |          // Set the duty cycle to 50/50 HIGH/LOW
                      GCLK_GENCTRL_GENEN |        // Enable GCLK3
                      GCLK_GENCTRL_SRC_DFLL48M |  // Set the 48MHz clock source
-                     GCLK_GENCTRL_ID(3);         // Select GCLK3
+                     GCLK_GENCTRL_ID(clk);         // Select GCLK3
   while (GCLK->STATUS.bit.SYNCBUSY)
     ;  // Wait for synchronization
 
-  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK3 | GCLK_CLKCTRL_ID_ADC;
+  GCLK->CLKCTRL.reg = GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN(clk) | GCLK_CLKCTRL_ID_ADC;
 
   /* Wait for bus synchronization. */
   while (GCLK->STATUS.bit.SYNCBUSY) {};
@@ -140,8 +147,14 @@ void ADCSetup() {
 
 
 void calc() {
+
+  _pinDesc = g_APinDescription[pin];
+  _pinAttr = _pinDesc.ulPinAttribute;
+  _tcNum = GetTCNumber(_pinDesc.ulPWMChannel);
+  PWMCLKID = int(26+(_tcNum/2));
+  GCLKDIVCalc();
   Prescaler();
-  Period = int((48000000 / Frequency / PRESVAL) - 1);  //Calculates number of cycles period takes up.
+  Period = int((48000000 / Frequency / PRESVAL / GCLKDIV) - 1);  //Calculates number of cycles period takes up.
   a = (maxv - minv);                                   //Calculate by how much to divide
   //Calculate GAIN setup values
   if (GAIN == 1) {
@@ -154,6 +167,27 @@ void calc() {
 void loop() {
 }
 
+void PWMClock() {
+  REG_GCLK_GENDIV = GCLK_GENDIV_DIV(GCLKDIV) |  
+                    GCLK_GENDIV_ID(PWMClk);    // Select Generic Clock (GCLK) 4
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;  // Wait for synchronization
+
+  REG_GCLK_GENCTRL = GCLK_GENCTRL_IDC |          // Set the duty cycle to 50/50 HIGH/LOW
+                     GCLK_GENCTRL_GENEN |        // Enable GCLK4
+                     GCLK_GENCTRL_SRC_DFLL48M |  // Set the 48MHz clock source
+                     GCLK_GENCTRL_ID(PWMClk);         // Select GCLK4
+
+
+  REG_GCLK_CLKCTRL = GCLK_CLKCTRL_CLKEN |       // Enable GCLK4 to TCC2 (and TC3)
+                     GCLK_CLKCTRL_GEN(PWMClk) |   // Select GCLK4
+                     GCLK_CLKCTRL_ID(PWMCLKID);  // Feed GCLK4 to TCC2 (and TC3)
+  while (GCLK->STATUS.bit.SYNCBUSY)
+    ;  // Wait for synchronization
+
+
+  while (GCLK->STATUS.bit.SYNCBUSY);
+}
 
 void PWMSetup() {
   // New pin or freqChange
@@ -161,10 +195,8 @@ void PWMSetup() {
 
 
 
-  _pinDesc = g_APinDescription[pin];
-  _pinAttr = _pinDesc.ulPinAttribute;
 
-  _tcNum = GetTCNumber(_pinDesc.ulPWMChannel);
+
   _tcChannel = GetTCChannelNumber(_pinDesc.ulPWMChannel);
 
   if (_pinAttr & PIN_ATTR_TIMER) {
@@ -174,26 +206,6 @@ void PWMSetup() {
   }
 
 
-  uint16_t GCLK_CLKCTRL_IDs[] = {
-    GCLK_CLKCTRL_ID(GCM_TCC0_TCC1),  // TCC0
-    GCLK_CLKCTRL_ID(GCM_TCC0_TCC1),  // TCC1
-    GCLK_CLKCTRL_ID(GCM_TCC2_TC3),   // TCC2
-    GCLK_CLKCTRL_ID(GCM_TCC2_TC3),   // TC3
-    GCLK_CLKCTRL_ID(GCM_TC4_TC5),    // TC4
-    GCLK_CLKCTRL_ID(GCM_TC4_TC5),    // TC5
-    GCLK_CLKCTRL_ID(GCM_TC6_TC7),    // TC6
-    GCLK_CLKCTRL_ID(GCM_TC6_TC7),    // TC7
-  };
-
-
-
-
-  // Wait for synchronization
-  GCLK->CLKCTRL.reg = (uint16_t)(GCLK_CLKCTRL_CLKEN | GCLK_CLKCTRL_GEN_GCLK0 | GCLK_CLKCTRL_IDs[_tcNum]);
-  REG_GCLK_GENDIV = GCLK_GENDIV_DIV(1);
-
-  while (GCLK->STATUS.bit.SYNCBUSY == 1)
-    ;
 
   // Check which timer to use
   if (_tcNum >= TCC_INST_NUM) {
@@ -425,5 +437,8 @@ void Prescaler() {
   };
 }
 
-
-
+void GCLKDIVCalc() {
+GCLKDIV = int(8/Frequency);
+if (GCLKDIV < 1) {GCLKDIV = 1;};
+if (GCLKDIV > 255) {GCLKDIV = 255;};
+}
