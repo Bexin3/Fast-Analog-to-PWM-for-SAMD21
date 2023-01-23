@@ -1,7 +1,8 @@
 # Fast-Analog-to-PWM-for-SAMD21-Arduino
 
 This project is now part of Speeduino, you can find it at https://github.com/Bexin3/Speeduino
-SAMC21 version (untested) - https://github.com/Bexin3/Snowduino-Null
+
+SAMC21 version (untested) - https://github.com/Bexin3/Snowduino-Null/tree/Speeduino-for-Snowduino
 
 
 A .ino project for SAMD21 Arduinos tested on Arduino Zero that allows conversion of Analog values into PWM duty cycle, tested frequencies are 0.00281-200000hz
